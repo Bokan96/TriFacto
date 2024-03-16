@@ -1,12 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using TMPro;
 using Unity.VisualScripting;
-using UnityEditor;
 using UnityEngine;
-using UnityEngine.Assertions.Must;
 using UnityEngine.UI;
 using Image = UnityEngine.UI.Image;
 
@@ -36,10 +33,12 @@ public class UIManager : MonoBehaviour
     public static GameObject turnStart;
     public static AudioSource soundClick1;
     public static AudioSource soundClick2;
+    public static AudioSource soundClick3;
     public static AudioSource soundUI;
     public static AudioSource soundError;
     public static AudioSource soundTerrain;
     public static AudioSource soundFlip;
+    public static AudioSource soundJump;
     public static Text targetDescription;
     public static Text[,] scoresUI = new Text[3, 2];
 
@@ -64,7 +63,7 @@ public class UIManager : MonoBehaviour
 
     public static int currentPlayer;
     private Card playedCard;
-    private bool animationInProgress;
+    private bool[] animationInProgress = new bool[3];
     private bool cardPlayed;
     private Image cardPreviewPlayed;
     private List<Card>[,] factionAreas;
@@ -89,10 +88,12 @@ public class UIManager : MonoBehaviour
 
         soundClick1 = GameObject.Find("ClickSound1").GetComponent<AudioSource>();
         soundClick2 = GameObject.Find("ClickSound2").GetComponent<AudioSource>();
+        soundClick3 = GameObject.Find("ClickSound3").GetComponent<AudioSource>();
         soundUI = GameObject.Find("UISound").GetComponent<AudioSource>();
         soundError = GameObject.Find("ErrorSound").GetComponent<AudioSource>();
         soundTerrain = GameObject.Find("TerrainSound").GetComponent<AudioSource>();
         soundFlip = GameObject.Find("FlipSound").GetComponent<AudioSource>();
+        soundJump = GameObject.Find("JumpSound").GetComponent<AudioSource>();
 
         selectField.SetActive(false);
         playButton.gameObject.SetActive(false);
@@ -132,9 +133,13 @@ public class UIManager : MonoBehaviour
     private void CalculateScore()
     {
         List<Card>[,] factionAreas = GameEngine.field.factionAreas;
+
+        int[,] oldScores = new int[3, 2];
+        oldScores = scores;
+
         scores = new int[3, 2];
 
-        for(int a=0;a<3;a++)
+        for (int a=0;a<3;a++)
             for(int p = 0; p < 2; p++)
             {
                 if (GameEngine.field.CardExists(13, a, GameEngine.players[p]))
@@ -173,8 +178,48 @@ public class UIManager : MonoBehaviour
                     scores[a, p] += power;
                 }
             }
-                
 
+
+
+        for (int a = 0; a < 3; a++)
+            for (int p = 0; p < 2; p++)
+            {
+                int copyOfA = a;
+                int copyOfP = p;
+
+                if (scores[a, p] != oldScores[a, p])
+                {
+                    LeanTween.scale(scoresUI[a, p].gameObject, Vector3.one * 2, 0.8f);
+                    LeanTween.scale(scoresUI[a, (p+1)%2].gameObject, Vector3.one * 0.8f, 0.8f);
+
+                    LeanTween.scale(scoresUI[a, p].gameObject, Vector3.one, 0.3f)
+                    .setDelay(2f);
+                    LeanTween.scale(scoresUI[a, (p + 1) % 2].gameObject, Vector3.one, 0.3f)
+                    .setDelay(2f);
+                }
+
+                float currentFloatValue = (float)oldScores[copyOfA, copyOfP];
+
+                LeanTween.value(gameObject, currentFloatValue, (float)scores[copyOfA, copyOfP], 2f)
+                    .setEaseOutCubic()
+                    .setOnUpdate((float val) =>
+                    {
+                        int newValue = Mathf.RoundToInt(val);
+                        if (newValue != scores[copyOfA, copyOfP])
+                        {
+                            scores[copyOfA, copyOfP] = newValue;
+                            if (newValue > oldScores[copyOfA, copyOfP])
+                                soundUI.Play();
+                            else if(newValue < oldScores[copyOfA, copyOfP])
+                                soundError.Play();
+                        }
+                    });
+            }
+
+    }
+
+    private void ShowScore()
+    {
         for (int a = 0; a < 3; a++)
             for (int p = 0; p < 2; p++)
             {
@@ -190,32 +235,22 @@ public class UIManager : MonoBehaviour
 
     private void LateUpdate()
     {
-        CalculateScore();
+        ShowScore();
+        
         gameText.text = "Teren:\n";
-        for (int p = 0; p < 2; p++)
-        {
-            gameText.text += $"\nPlayer{p}\n";
-            for (int a = 0; a < 3; a++)
-            {
-                gameText.text += $"=-=- Area{a} -=-=\n";
-                if (factionAreas[a, p].Count == 0)
-                    gameText.text += "Prazan Teren\n";
-                for (int c = 0; c < factionAreas[a, p].Count; c++)
-                {
-                    gameText.text += " " + factionAreas[a, p][c].Name + "\n";
-                }
-            }
-        }
 
         gameText.text += $"\n\n P1 Sasuke:{GameEngine.players[0].effects[0]}\nP2 Sasuke:{GameEngine.players[1].effects[0]}\n";
         if(playedCard != null)
             gameText.text += $"playedCard: {playedCard.Name}\n";
         else
             gameText.text += $"playedCard: null\n";
+
+        gameText.text += $"\n\n P1 Armstrong{GameEngine.players[0].effects[1]}  \nP2 Armstrong{GameEngine.players[1].effects[1]}";
     }
 
     public void OnCardHandSelect(int index)
     {
+        int previousCardHandId = selectedCardHandId;
         selectedCardHandId = index;
 
         if (index == -1)
@@ -224,15 +259,16 @@ public class UIManager : MonoBehaviour
             flipButton.gameObject.SetActive(false);
             return;
         }
-        
+
         selectedCardHand = GameEngine.players[currentPlayer].Hand[selectedCardHandId];
 
-        if (selectedCardHand.Playable(GameEngine.players[currentPlayer],selectedArea) && !cardPlayed)
+        if (selectedCardHand.Playable(GameEngine.players[currentPlayer], selectedArea) && !cardPlayed)
             playButton.gameObject.SetActive(true);
         else
             playButton.gameObject.SetActive(false);
-        flipButton.gameObject.SetActive(true);
 
+        flipButton.gameObject.SetActive(true);
+        
         ShowCard(selectedCardHand);
     }
 
@@ -245,6 +281,7 @@ public class UIManager : MonoBehaviour
         }
 
         cardPlayed = true;
+        
         soundClick2.Play();
 
         Player player = GameEngine.players[currentPlayer];
@@ -252,12 +289,15 @@ public class UIManager : MonoBehaviour
 
         if (card.Playable(player, selectedArea))
         {
+            GameEngine.players[currentPlayer].setEffect(1, false);
             player.Hand.Remove(card);
             factionAreas[selectedArea, player.PlayerID].Add(card);
             ShowField();
+            
             PlayCard(player, card, selectedArea);
         }
 
+        
         SelectArea(-1);
         selectedCardHandId = -1;
         ShowHand();
@@ -321,7 +361,6 @@ public class UIManager : MonoBehaviour
         }
         else if(card.Id == 7)
         {
-            Debug.Log("Odigrana Historia");
             SwapUiElements();
         }
         else if(card.Id == 2)
@@ -349,6 +388,10 @@ public class UIManager : MonoBehaviour
             cardPreviewPlayed.sprite = cardImages[GameEngine.deck.cards[0].Id];
             cardPreview.sprite = cardImages[GameEngine.deck.cards[0].Id];
         }
+        else if (card.Id == 14)
+        {
+            GameEngine.players[currentPlayer].setEffect(1, true);
+        }
 
     }
 
@@ -364,14 +407,14 @@ public class UIManager : MonoBehaviour
 
         GameObject imageOfCard = GameObject.Find($"Card{selectedCardHandId}");
 
-        if (!animationInProgress)
+        if (!animationInProgress[0])
         {
-            animationInProgress = true;
-            LeanTween.rotateAroundLocal(imageOfCard, Vector3.forward, 360f, 0.2f)
+            animationInProgress[0] = true;
+            LeanTween.rotateAroundLocal(imageOfCard, Vector3.forward, 360f, 0.4f)
             .setEase(LeanTweenType.easeInOutQuad)
             .setOnComplete(() =>
             {
-                animationInProgress = false;
+                animationInProgress[0] = false;
             });
         }
         
@@ -411,14 +454,14 @@ public class UIManager : MonoBehaviour
                     
                     Image imageOfCard = GetFieldImage(selectedCardField);
 
-                    if (!animationInProgress)
+                    if (!animationInProgress[1])
                     {
-                        animationInProgress = true;
+                        animationInProgress[1] = true;
                         LeanTween.rotateAroundLocal(imageOfCard.gameObject, Vector3.forward, 360f, 0.2f)
                         .setEase(LeanTweenType.easeInOutQuad)
                         .setOnComplete(() =>
                         {
-                            animationInProgress = false;
+                            animationInProgress[1] = false;
                             PlayCard(selectedCardField.Player, selectedCardField, selectedCardField.Area);
                         });
                     }
@@ -450,16 +493,34 @@ public class UIManager : MonoBehaviour
                 }
                 else
                 {
-                    //areas[selectedCardField.Area].players[currentPlayer].cards[GameEngine.field.totalCards(selectedCardField.Area, GameEngine.players[currentPlayer]) - 1].gameObject.SetActive(false);
-                    GetFieldImage(selectedCardField).gameObject.SetActive(false);
-                    factionAreas[selectedCardField.Area, currentPlayer].RemoveAt(factionAreas[selectedCardField.Area, currentPlayer].Count - 1);
-                    //TODO dodavanje karte na drugi teren
-                    selectedCardField.Area = selectedArea;
-                    factionAreas[selectedCardField.Area, currentPlayer].Add(selectedCardField);
-                    GetFieldImage(selectedCardField).gameObject.SetActive(true);
+                    animationInProgress[1] = true;
+                    soundJump.Play();
+                    LeanTween.scale(GetFieldImage(selectedCardField).gameObject, Vector3.zero, 0.7f)
+                    .setEase(LeanTweenType.easeInOutQuad)
+                    .setOnComplete(() =>
+                    {
+                        GetFieldImage(selectedCardField).gameObject.transform.localScale = Vector3.one;
+                        GetFieldImage(selectedCardField).gameObject.SetActive(false);
+                        factionAreas[selectedCardField.Area, currentPlayer].RemoveAt(factionAreas[selectedCardField.Area, currentPlayer].Count - 1);
+                        
 
-                    selectedCardField.Area = selectedArea;
-                    ShowField();
+                        selectedCardField.Area = selectedArea;
+                        factionAreas[selectedCardField.Area, currentPlayer].Add(selectedCardField);
+                        GetFieldImage(selectedCardField).gameObject.SetActive(true);
+                        GetFieldImage(selectedCardField).gameObject.transform.localScale = Vector3.zero;
+                        ShowField();
+
+                        LeanTween.scale(GetFieldImage(selectedCardField).gameObject, Vector3.one, 0.4f)
+                        .setEase(LeanTweenType.easeInOutQuad)
+                        .setOnComplete(() =>
+                        {
+                            soundClick2.Play();
+                            animationInProgress[1] = false;
+                            selectedCardField.Area = selectedArea;
+                            ShowField();
+                        });
+                    });
+                    
                     SwapUiElements();
                 }
 
@@ -471,14 +532,14 @@ public class UIManager : MonoBehaviour
                 
                 Image imageOfCard = GetFieldImage(selectedCardField);
 
-                if (!animationInProgress)
+                if (!animationInProgress[1])
                 {
-                    animationInProgress = true;
+                    animationInProgress[1] = true;
                     LeanTween.rotateAroundLocal(imageOfCard.gameObject, Vector3.forward, 360f, 0.2f)
                     .setEase(LeanTweenType.easeInOutQuad)
                     .setOnComplete(() =>
                     {
-                        animationInProgress = false;
+                        animationInProgress[1] = false;
                         PlayCard(selectedCardField.Player, selectedCardField, selectedCardField.Area);
                     });
                 }
@@ -497,14 +558,14 @@ public class UIManager : MonoBehaviour
                     PlayCard(selectedCardField.Player, selectedCardField, selectedCardField.Area);
                     Image imageOfCard = GetFieldImage(selectedCardField);
 
-                    if (!animationInProgress)
+                    if (!animationInProgress[1])
                     {
-                        animationInProgress = true;
+                        animationInProgress[1] = true;
                         LeanTween.rotateAroundLocal(imageOfCard.gameObject, Vector3.forward, 360f, 0.2f)
                         .setEase(LeanTweenType.easeInOutQuad)
                         .setOnComplete(() =>
                         {
-                            animationInProgress = false;
+                            animationInProgress[1] = false;
                         });
                     }
                     ShowField();
@@ -592,10 +653,10 @@ public class UIManager : MonoBehaviour
 
     public void PreviewCardAnimation()
     {
-        if (animationInProgress)
+        if (animationInProgress[2])
             return;
 
-        animationInProgress = true;
+        animationInProgress[2] = true;
 
         Vector3 startingPosition = cardPreview.transform.position;
 
@@ -607,7 +668,7 @@ public class UIManager : MonoBehaviour
                     .setEase(LeanTweenType.easeOutExpo)
                     .setOnComplete(() =>
                     {
-                        animationInProgress = false;
+                        animationInProgress[2] = false;
                     });
                 
             });
@@ -623,6 +684,8 @@ public class UIManager : MonoBehaviour
 
     public void ShowField()
     {
+        CalculateScore();
+        Debug.Log("ShowField()");
         for(int a = 0;a < 3;a++)
             for(int p = 0;p < 2;p++)
                 for (int c = 0; c < factionAreas[a, p].Count; c++)
@@ -694,6 +757,7 @@ public class UIManager : MonoBehaviour
 
     public void ShowHand()
     {
+
         for (int i = 0; i < 6; i++)
         {
             cardsInHand[i].SetActive(false);
@@ -788,7 +852,7 @@ public class UIManager : MonoBehaviour
         selectHand.SetActive(true);
         turnStart.SetActive(false);
 
-        if (GameEngine.players[currentPlayer].effects[0])
+        if (GameEngine.players[currentPlayer].effects[0] && GameEngine.field.totalCards(GameEngine.players[currentPlayer])>0)
         {
             playedCard = new Card(5);
             selectedCardHand = playedCard;

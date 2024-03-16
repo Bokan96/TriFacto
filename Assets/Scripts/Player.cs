@@ -8,7 +8,7 @@ public class Player
     public int PlayerID { get; private set; }
     public int CurrentHP { get; private set; }
     public List<Card> Hand { get; private set; }
-    public bool[] effects {  get; private set; }    // 0-Sasuke
+    public bool[] effects {  get; private set; }    // 0-Sasuke 1-Armstrong
 
     public Player(int playerID, int startingHP)
     {
@@ -48,5 +48,10 @@ public class Player
     public void setEffect(int effect, bool state)
     {
         effects[effect] = state;
+    }
+
+    public void swapEffect(int effect)
+    {
+        effects[effect] = !effects[effect];
     }
 }

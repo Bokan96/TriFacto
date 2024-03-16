@@ -10,6 +10,5 @@ public class SelectArea : MonoBehaviour
         uiManager.SelectArea(areaIndex);
         audioSource = GameObject.Find("TerrainSound").GetComponent<AudioSource>();
         audioSource.Play();
-        Debug.Log("Selected" + areaIndex);
     }
 }

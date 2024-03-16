@@ -161,7 +161,7 @@ public class Card
         }
         else
         {
-            if (Faction == area)
+            if (Faction == area || player.effects[1] == true)   //  Armstrong
             {
                 playable = true;
             }

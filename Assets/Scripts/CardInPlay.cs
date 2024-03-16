@@ -11,7 +11,10 @@ public class CardInPlay : MonoBehaviour
 
     public void OnClickCard2()
     {
+        UIManager.soundClick3.Play();
+
         Card selectedCard;
+
         if (area == -1)
             selectedCard = UIManager.selectedCardHand;
         else
