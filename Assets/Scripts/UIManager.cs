@@ -495,6 +495,7 @@ public class UIManager : MonoBehaviour
                 {
                     animationInProgress[1] = true;
                     soundJump.Play();
+                    
                     LeanTween.scale(GetFieldImage(selectedCardField).gameObject, Vector3.zero, 0.7f)
                     .setEase(LeanTweenType.easeInOutQuad)
                     .setOnComplete(() =>
@@ -502,7 +503,6 @@ public class UIManager : MonoBehaviour
                         GetFieldImage(selectedCardField).gameObject.transform.localScale = Vector3.one;
                         GetFieldImage(selectedCardField).gameObject.SetActive(false);
                         factionAreas[selectedCardField.Area, currentPlayer].RemoveAt(factionAreas[selectedCardField.Area, currentPlayer].Count - 1);
-                        
 
                         selectedCardField.Area = selectedArea;
                         factionAreas[selectedCardField.Area, currentPlayer].Add(selectedCardField);
@@ -515,6 +515,7 @@ public class UIManager : MonoBehaviour
                         .setOnComplete(() =>
                         {
                             soundClick2.Play();
+                            
                             animationInProgress[1] = false;
                             selectedCardField.Area = selectedArea;
                             ShowField();
